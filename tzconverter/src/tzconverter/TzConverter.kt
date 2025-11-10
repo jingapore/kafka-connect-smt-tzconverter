@@ -5,6 +5,7 @@ import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.config.ConfigException
 
 abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned {
 
@@ -14,6 +15,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
 
     companion object {
         val FIELD_CONFIG = "field"
+        val TARGET_TIMEZONE = "target.tz"
         val CONFIG_DEF: ConfigDef = ConfigDef().apply {
             define(
                 FIELD_CONFIG,
@@ -21,6 +23,17 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
                 FIELD_DEFAULT,
                 ConfigDef.Importance.HIGH,
                 "This field contains the timestamp that we want to convert to another timezone"
+            )
+            define(
+                TARGET_TIMEZONE, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+                ConfigDef.Validator { _, value ->
+                    val tz = value as? String ?: throw ConfigException("Timezone must be a string")
+                    try {
+                        ZoneId.of(tz)
+                    } catch (e: Exception) {
+                        throw ConfigException("Invalid timezone; '$tz'")
+                    }
+                }, ConfigDef.Importance.HIGH, "Target timezone"
             )
         }
     }
