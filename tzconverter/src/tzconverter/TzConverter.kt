@@ -16,26 +16,29 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
     protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any)
 
     companion object {
-        const val FIELD_CONFIG = "field"
-        const val TARGET_TIMEZONE = "target.tz"
+        const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
+        const val TARGET_TIMEZONE_FIELDNAME = "target.tz"
         val CONFIG_DEF: ConfigDef = ConfigDef().apply {
             define(
-                FIELD_CONFIG,
+                FIELD_TO_TRANSFORM_FIELDNAME,
                 ConfigDef.Type.STRING,
-                FIELD_DEFAULT,
+                ConfigDef.NO_DEFAULT_VALUE,
                 ConfigDef.Importance.HIGH,
                 "This field contains the timestamp that we want to convert to another timezone"
             )
             define(
-                TARGET_TIMEZONE, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                ConfigDef.Validator { _, value ->
+                TARGET_TIMEZONE_FIELDNAME,
+                ConfigDef.Type.STRING,
+                ConfigDef.NO_DEFAULT_VALUE,
+                { _, value ->
                     val tz = value as? String ?: throw ConfigException("Timezone must be a string")
                     try {
                         ZoneId.of(tz)
                     } catch (e: Exception) {
                         throw ConfigException("Invalid timezone; '$tz'")
                     }
-                }, ConfigDef.Importance.HIGH, "Target timezone"
+                },
+                ConfigDef.Importance.HIGH, "Target timezone"
             )
         }
     }
@@ -74,6 +77,6 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
     // this begs the qn: what is config() for?
     override fun configure(configs: Map<String?, *>) {
         val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
-        targetTz = simpleConfig.getString()
+        targetTz = simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME)
     }
 }
