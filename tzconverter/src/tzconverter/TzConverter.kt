@@ -1,6 +1,5 @@
 package tzconverter
 
-import org.apache.kafka.connect.components.Versioned
 import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.data.Schema
@@ -8,7 +7,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.connect.transforms.util.SimpleConfig
 
-abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned {
+abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     private lateinit var targetTz: ZoneId
 
     protected abstract fun operatingSchema(record: R): Schema
@@ -79,4 +78,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
         val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
         targetTz = simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME)
     }
+
+    override fun close() {}
+
 }
