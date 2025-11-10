@@ -6,16 +6,18 @@ import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.connect.transforms.util.SimpleConfig
 
 abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned {
+    private lateinit var targetTz: ZoneId
 
     protected abstract fun operatingSchema(record: R): Schema
     protected abstract fun operatingValue(record: R): Any
     protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any)
 
     companion object {
-        val FIELD_CONFIG = "field"
-        val TARGET_TIMEZONE = "target.tz"
+        const val FIELD_CONFIG = "field"
+        const val TARGET_TIMEZONE = "target.tz"
         val CONFIG_DEF: ConfigDef = ConfigDef().apply {
             define(
                 FIELD_CONFIG,
@@ -66,5 +68,12 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R>, Versioned 
 
     override fun config(): ConfigDef {
         return CONFIG_DEF
+    }
+
+    // `configure` is called to initialise configs passed in to CONFIG_DEF
+    // this begs the qn: what is config() for?
+    override fun configure(configs: Map<String?, *>) {
+        val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
+        targetTz = simpleConfig.getString()
     }
 }
