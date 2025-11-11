@@ -23,7 +23,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     // why do we use ZoneId instead of TimeZone (which we set as an attr for SimpleDateFormat)?
     // because ZoneId is more modern and TimeZone is legacy: https://stackoverflow.com/questions/79073807/whats-the-difference-between-timezone-and-zoneid
     private lateinit var targetTz: ZoneId
-    private lateinit var targetType: String
+    private lateinit var targetType: TimestampTargetType
     private lateinit var fieldToTransform: String
 
     // we could let the user define this in config, but for simplicity we remove this flexibility from the user
@@ -40,9 +40,8 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R
 
     private interface TimezoneTranslator {
-        fun toType(originalVal: Date): Object {
-            return null
-        }
+        fun typeSchema(isOptional: Boolean): Schema
+        fun toType(originalVal: Date): Object
     }
 
     private enum class TimestampTargetType(val wireName: String) {
@@ -94,7 +93,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
             )
         }
 
-        private val TRANSLATORS: Map<TimestampTargetType, TimestampTranslator> = buildMap {
+        private val TRANSLATORS: Map<TimestampTargetType, TimezoneTranslator> = buildMap {
             put(TimestampTargetType.STRING)
         }
     }
@@ -137,6 +136,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     override fun configure(configs: Map<String?, *>) {
         val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
         targetTz = ZoneId.of(simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME))
+        targetType = TimestampTargetType.valueOf(simpleConfig.getString(TARGET_TYPE_STRING))
         fieldToTransform = simpleConfig.getString(FIELD_TO_TRANSFORM_FIELDNAME)
         targetTimestampWithTzFormat.timeZone = TimeZone.getTimeZone(targetTz)
         schemaUpdateCache = SynchronizedCache(LRUCache(CACHE_SIZE));
@@ -155,7 +155,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
 
         schema.fields().forEach { field ->
             if (field.name().equals(fieldToTransform)) {
-                builder.field(field.name(), TRANSLATORS.get())
+                builder.field(field.name(), TRANSLATORS[targetType]?:.typeSchema(field.schema().isOptional))
 
             } else {
                 builder.field(field.name(), field.schema())
