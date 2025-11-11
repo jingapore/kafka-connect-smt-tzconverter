@@ -16,12 +16,14 @@ import org.apache.kafka.common.cache.SynchronizedCache
 import org.apache.kafka.connect.data.Field
 import java.text.SimpleDateFormat
 import java.time.ZoneId
+import java.util.Date
 import java.util.TimeZone
 
 abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     // why do we use ZoneId instead of TimeZone (which we set as an attr for SimpleDateFormat)?
     // because ZoneId is more modern and TimeZone is legacy: https://stackoverflow.com/questions/79073807/whats-the-difference-between-timezone-and-zoneid
     private lateinit var targetTz: ZoneId
+    private lateinit var targetType: String
     private lateinit var fieldToTransform: String
 
     // we could let the user define this in config, but for simplicity we remove this flexibility from the user
@@ -36,6 +38,23 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     protected abstract fun operatingSchema(record: R): Schema
     protected abstract fun operatingValue(record: R): Any
     protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R
+
+    private interface TimezoneTranslator {
+        fun toType(originalVal: Date): Object {
+            return null
+        }
+    }
+
+    private enum class TimestampTargetType(val wireName: String) {
+        STRING("string"),
+        DATE("date");
+
+        companion object {
+            fun fromWireName(name: String): TimestampTargetType =
+                entries.firstOrNull { it.wireName == name }
+                    ?: throw ConfigException("Unsupported timestamp target type: $name")
+        }
+    }
 
     companion object {
         const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
@@ -73,6 +92,10 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
                 },
                 ConfigDef.Importance.HIGH, "Target timezone"
             )
+        }
+
+        private val TRANSLATORS: Map<TimestampTargetType, TimestampTranslator> = buildMap {
+            put(TimestampTargetType.STRING)
         }
     }
 
@@ -131,7 +154,13 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
         val builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct())
 
         schema.fields().forEach { field ->
-            builder.field(field.name(), field.schema())
+            if (field.name().equals(fieldToTransform)) {
+                builder.field(field.name(), TRANSLATORS.get())
+
+            } else {
+                builder.field(field.name(), field.schema())
+            }
+
         }
 
         schema.defaultValue()?.let { default ->
