@@ -1,22 +1,56 @@
 package tzconverter
 
-import org.apache.kafka.connect.connector.ConnectRecord
-import org.apache.kafka.connect.transforms.Transformation
-import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.connect.connector.ConnectRecord
+import org.apache.kafka.connect.data.Schema
+import org.apache.kafka.connect.data.SchemaBuilder
+import org.apache.kafka.connect.data.Struct
+import org.apache.kafka.connect.transforms.Transformation
+import org.apache.kafka.connect.transforms.util.Requirements.requireStruct
+import org.apache.kafka.connect.transforms.util.SchemaUtil
 import org.apache.kafka.connect.transforms.util.SimpleConfig
+import org.apache.kafka.common.cache.Cache
+import org.apache.kafka.common.cache.LRUCache
+import org.apache.kafka.common.cache.SynchronizedCache
+import org.apache.kafka.connect.data.Field
+import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.util.TimeZone
 
 abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
+    // why do we use ZoneId instead of TimeZone (which we set as an attr for SimpleDateFormat)?
+    // because ZoneId is more modern and TimeZone is legacy: https://stackoverflow.com/questions/79073807/whats-the-difference-between-timezone-and-zoneid
     private lateinit var targetTz: ZoneId
+    private lateinit var fieldToTransform: String
+
+    // we could let the user define this in config, but for simplicity we remove this flexibility from the user
+    // later in `configure`, we set timezone based on user input
+    private val targetTimestampWithTzFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+
+    // why do we want a cache? first, this is a mapping between the original schema and the desired schema.
+    // without this cache, for every record, we'll be checking all record fields for a match with the target field
+    // and converting the schema accordingly. with this cache, we can skip such checks.
+    private lateinit var schemaUpdateCache: Cache<Schema, Schema>
 
     protected abstract fun operatingSchema(record: R): Schema
     protected abstract fun operatingValue(record: R): Any
-    protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any)
+    protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R
 
     companion object {
         const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
         const val TARGET_TIMEZONE_FIELDNAME = "target.tz"
+        const val CACHE_SIZE: Int = 16
+
+        // string is an ISO format that contains timezone. we cannot use Timestamp (https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Timestamp.html)
+        // because Timestamp doesn't have any representation for timezone.
+        const val TARGET_TYPE_STRING = "string";
+
+        // https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Date.html
+        const val TARGET_TYPE_DATE = "Date";
+
+        // https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Time.html
+        const val TARGET_TYPE_TIME = "Time";
         val CONFIG_DEF: ConfigDef = ConfigDef().apply {
             define(
                 FIELD_TO_TRANSFORM_FIELDNAME,
@@ -42,16 +76,18 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
         }
     }
 
+    //TODO: handle key
+
     class Value<R : ConnectRecord<R>> : TzConverter<R>() {
-        protected override fun operatingSchema(record: R): Schema {
+        override fun operatingSchema(record: R): Schema {
             return record.valueSchema()
         }
 
-        protected override fun operatingValue(record: R): Any {
+        override fun operatingValue(record: R): Any {
             return record.value()
         }
 
-        protected override fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R {
+        override fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R {
             return record.newRecord(
                 record.topic(),
                 record.kafkaPartition(),
@@ -62,6 +98,7 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
                 record.timestamp()
             )
         }
+
     }
 
     override fun apply(record: R): R {
@@ -76,9 +113,45 @@ abstract class TzConverter<R : ConnectRecord<R>> : Transformation<R> {
     // this begs the qn: what is config() for?
     override fun configure(configs: Map<String?, *>) {
         val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
-        targetTz = simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME)
+        targetTz = ZoneId.of(simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME))
+        fieldToTransform = simpleConfig.getString(FIELD_TO_TRANSFORM_FIELDNAME)
+        targetTimestampWithTzFormat.timeZone = TimeZone.getTimeZone(targetTz)
+        schemaUpdateCache = SynchronizedCache(LRUCache(CACHE_SIZE));
+
     }
 
     override fun close() {}
+
+    private fun getOrBuildUpdatedSchema(schema: Schema): Schema =
+        schemaUpdateCache.get(schema) ?: buildUpdatedSchema(schema).also {
+            schemaUpdateCache.put(schema, it)
+        }
+
+    private fun buildUpdatedSchema(schema: Schema): Schema {
+        val builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct())
+
+        schema.fields().forEach { field ->
+            builder.field(field.name(), field.schema())
+        }
+
+        schema.defaultValue()?.let { default ->
+            val updatedDefaultValue = applyValueWithSchema(default as Struct, builder)
+            builder.defaultValue(updatedDefaultValue)
+        }
+        return builder.build()
+    }
+
+    private fun applyWithSchema(record: R): R {
+        // stock timestampconvertor checks if config.field is empty
+        // is there a reason to do so? maybe it will be more apparent when
+        // we extend this transformation to key (not just value)
+        val schema: Schema = operatingSchema(record)
+        val value: Struct = requireStruct(operatingValue(record), PURPOSE)
+
+        val updatedSchema = getOrBuildUpdatedSchema(schema)
+        val updatedValue = applyValueWithSchema(value, updatedSchema)
+
+        return newRecord(record, updatedSchema, updatedValue)
+    }
 
 }
