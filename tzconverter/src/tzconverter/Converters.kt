@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.data.Date
 import org.apache.kafka.connect.data.Schema
+import org.apache.kafka.connect.errors.DataException
 
 internal fun <R : ConnectRecord<R>> valueTzConverter(cfg: Config): (R) -> R =
     recordTransformer(cfg, Lens.Value)
@@ -17,12 +18,23 @@ private fun <R : ConnectRecord<R>> recordTransformer(cfg: Config, lens: Lens): (
     val schemaCache = ConcurrentHashMap<Schema, Schema>()
     return { record ->
         val schema = lens.getSchema(record)
+        if (schema == null) {
+            throw DataException("Cannot apply without schema on ${lens.javaClass.simpleName.lowercase()} for topic='${record.topic()}'")
+        }
+        if (schema.name() != Date.LOGICAL_NAME) {
+            throw DataException("Cannot apply if schema is not Date on ${lens.javaClass.simpleName.lowercase()} for topic='${record.topic()}'")
+        }
         val converted: Pair<Schema?, Any?> =
-            if (schema == null) {
-                null to null
-            } else {
-                null to null
-            }
+
+        if (cfg.fieldToTransform.isNullOrBlank()) {
+            null to null
+        } else {
+            val struct = requireStructOrNull()
+            val updatedSchema = buildUpdatedSchema(schema, cfg).also {}
+            val updatedStruct
+            updatedSchema to updatedStruct
+        }
+
         lens.createNewRecord(record, converted.first, converted.second)
     }
 }
