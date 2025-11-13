@@ -153,12 +153,13 @@ open class TzConverter<R : ConnectRecord<R>>(private val which: Which) : Transfo
     // this begs the qn: what is config() for?
     override fun configure(configs: Map<String?, *>) {
         val simpleConfig: SimpleConfig = SimpleConfig(CONFIG_DEF, configs)
-        targetTz = ZoneId.of(simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME))
-        targetType = TimestampTargetType.valueOf(simpleConfig.getString(TARGET_TYPE_STRING))
-        fieldToTransform = simpleConfig.getString(FIELD_TO_TRANSFORM_FIELDNAME)
-        targetTimestampWithTzFormat.timeZone = TimeZone.getTimeZone(targetTz)
+        Config(
+            fieldToTransform = simpleConfig.getString(FIELD_TO_TRANSFORM_FIELDNAME),
+            targetTz = ZoneId.of(simpleConfig.getString(TARGET_TIMEZONE_FIELDNAME)),
+            targetType = TimestampTargetType.valueOf(simpleConfig.getString(TARGET_TYPE_FIELDNAME)),
+            targetTzFormat = SimpleDateFormat(simpleConfig.getString(TARGET_TIMEZONE_FORMAT_FIELDNAME))
+        )
         schemaUpdateCache = SynchronizedCache(LRUCache(CACHE_SIZE));
-
     }
 
     override fun close() {}

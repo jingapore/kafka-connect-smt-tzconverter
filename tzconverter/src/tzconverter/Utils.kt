@@ -3,21 +3,23 @@ package tzconverter
 import java.text.SimpleDateFormat
 import java.time.ZoneId
 import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.config.ConfigException
 
-
-private const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
-private const val TARGET_TIMEZONE_FIELDNAME = "target.tz"
-private const val CACHE_SIZE: Int = 16
+internal const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
+internal const val TARGET_TIMEZONE_FIELDNAME = "target.tz"
+internal const val TARGET_TYPE_FIELDNAME = "target.type"
+internal const val TARGET_TIMEZONE_FORMAT_FIELDNAME = "target.tzformat"
+internal const val CACHE_SIZE: Int = 16
 
 // string is an ISO format that contains timezone. we cannot use Timestamp (https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Timestamp.html)
 // because Timestamp doesn't have any representation for timezone.
-private const val TARGET_TYPE_STRING = "string";
+internal const val TARGET_TYPE_STRING = "string";
 
 // https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Date.html
-private const val TARGET_TYPE_DATE = "Date";
+internal const val TARGET_TYPE_DATE = "Date";
 
 // https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Time.html
-private const val TARGET_TYPE_TIME = "Time";
+internal const val TARGET_TYPE_TIME = "Time";
 
 internal val CONFIG_DEF: ConfigDef = ConfigDef().apply {
     define(
@@ -50,7 +52,7 @@ data class Config(
     val targetTz: ZoneId,
     val targetType: TimestampTargetType,
     // required if targetType is STRING
-    val targetTimestampWithTzFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+    val targetTzFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
 )
 
 enum class TimestampTargetType { STRING, DATE }
