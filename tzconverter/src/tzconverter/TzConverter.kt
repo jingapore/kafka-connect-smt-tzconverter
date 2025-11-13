@@ -47,7 +47,7 @@ open class TzConverter<R : ConnectRecord<R>>(private val which: Which) : Transfo
 
     /*    protected abstract fun operatingSchema(record: R): Schema
         protected abstract fun operatingValue(record: R): Any
-        protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any)*/: R
+        protected abstract fun newRecord(record: R, updatedSchema: Schema, updatedValue: Any): R*/
 
     /*    private interface TimezoneTranslator {
             fun typeSchema(isOptional: Boolean): Schema
