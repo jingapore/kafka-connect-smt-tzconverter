@@ -51,7 +51,6 @@ data class Config(
     // because ZoneId is more modern and TimeZone is legacy: https://stackoverflow.com/questions/79073807/whats-the-difference-between-timezone-and-zoneid
     val targetTz: ZoneId,
     val targetType: TimestampTargetType,
-    // required if targetType is STRING
     val targetTzFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
 )
 
