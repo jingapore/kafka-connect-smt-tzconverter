@@ -54,4 +54,12 @@ data class Config(
     val targetTzFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
 )
 
-enum class TimestampTargetType { STRING, DATE }
+enum class TimestampTargetType {
+    STRING,
+
+    // IMPORTANT: note that DATE is not Date in Kafka Data type, which is a timestamp, but just Date
+    // https://kafka.apache.org/25/javadoc/org/apache/kafka/connect/data/Date.html
+    // "A date representing a calendar day with no time of day or timezone.
+    // The corresponding Java type is a java.util.Date with hours, minutes, seconds, milliseconds set to 0. The underlying representation is an integer representing the number of standardized days (based on a number of milliseconds with 24 hours/day, 60 minutes/hour, 60 seconds/minute, 1000 milliseconds/second with n) since Unix epoch."
+    DATE
+}
