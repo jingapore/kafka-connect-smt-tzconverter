@@ -10,6 +10,7 @@ import java.util.Date as JDate
 import org.apache.kafka.connect.data.Struct
 import org.apache.kafka.connect.data.SchemaBuilder
 import java.text.SimpleDateFormat
+import java.time.ZoneOffset
 import java.util.TimeZone
 
 internal fun <R : ConnectRecord<R>> valueTzConverter(cfg: Config): (R) -> R =
@@ -21,10 +22,11 @@ private fun <R : ConnectRecord<R>> recordTransformer(cfg: Config, lens: Lens): (
     // why do we want a cache? first, this is a mapping between the original schema and the desired schema.
     // without this cache, for every record, we'll be checking all record fields for a match with the target field
     // and converting the schema accordingly. with this cache, we can skip such checks.
+    // TODO: convert to LRUCache from Kafka and handle concurrency with Synchronized
     val schemaCache = ConcurrentHashMap<Schema, Schema>()
     return { record ->
         val schema = lens.getSchema(record)
-        if (schema == null) throw DataException("Cannot apply without schema on ${lens.javaClass.simpleName.lowercase()} for topic='${record.topic()}'")
+            ?: throw DataException("Cannot apply without schema on ${lens.javaClass.simpleName.lowercase()} for topic='${record.topic()}'")
         val value = lens.getValue(record)
         if (value == null) {
             record
@@ -85,7 +87,7 @@ private sealed interface Lens {
         override fun <R : ConnectRecord<R>> getValue(r: R): Any? = r.key()
         override fun <R : ConnectRecord<R>> getSchema(r: R): Schema? = r.keySchema()
         override fun <R : ConnectRecord<R>> createNewRecord(r: R, schema: Schema?, value: Any?): R {
-            TODO("Not yet implemented")
+            return r.newRecord(r.topic(), r.kafkaPartition(), schema, value, r.valueSchema(), r.value(), r.timestamp())
         }
     }
 
@@ -93,7 +95,7 @@ private sealed interface Lens {
         override fun <R : ConnectRecord<R>> getValue(r: R): Any? = r.value()
         override fun <R : ConnectRecord<R>> getSchema(r: R): Schema? = r.valueSchema()
         override fun <R : ConnectRecord<R>> createNewRecord(r: R, schema: Schema?, value: Any?): R {
-            TODO("Not yet implemented")
+            return r.newRecord(r.topic(), r.kafkaPartition(), r.keySchema(), r.key(), schema, value, r.timestamp())
         }
     }
 }

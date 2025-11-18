@@ -8,7 +8,6 @@ import org.apache.kafka.common.config.ConfigException
 internal const val FIELD_TO_TRANSFORM_FIELDNAME = "field"
 internal const val TARGET_TIMEZONE_FIELDNAME = "target.tz"
 internal const val TARGET_TYPE_FIELDNAME = "target.type"
-internal const val TARGET_TIMEZONE_FORMAT_FIELDNAME = "target.tzformat"
 internal const val CACHE_SIZE: Int = 16
 
 // string is an ISO format that contains timezone. we cannot use Timestamp (https://kafka.apache.org/11/javadoc/org/apache/kafka/connect/data/Timestamp.html)
@@ -43,6 +42,10 @@ internal val CONFIG_DEF: ConfigDef = ConfigDef().apply {
         },
         ConfigDef.Importance.HIGH, "Target timezone"
     )
+    define(
+        TARGET_TYPE_FIELDNAME,
+        ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Target type"
+    )
 }
 
 data class Config(
@@ -57,7 +60,10 @@ data class Config(
 enum class TimestampTargetType {
     STRING,
 
-    // IMPORTANT: note that DATE is not Date in Kafka Data type, which is a timestamp, but just Date
+    // IMPORTANT: note that DATE is not Date in Kafka Data type
+    // In Kafka, Date is NOT a timestamp, it is zero-ed out on
+    // everything except date. In Java, DATE is a timestamp.
+    // Here's the relevant excerpt from Kafka docs.
     // https://kafka.apache.org/25/javadoc/org/apache/kafka/connect/data/Date.html
     // "A date representing a calendar day with no time of day or timezone.
     // The corresponding Java type is a java.util.Date with hours, minutes, seconds, milliseconds set to 0. The underlying representation is an integer representing the number of standardized days (based on a number of milliseconds with 24 hours/day, 60 minutes/hour, 60 seconds/minute, 1000 milliseconds/second with n) since Unix epoch."
