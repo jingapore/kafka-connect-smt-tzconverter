@@ -120,6 +120,13 @@ private fun convertOne(sourceValue: JDate, cfg: Config): Any? =
                 .toInstant()
             JDate.from(utcMidnightInstant)
         }
+
+        TimestampTargetType.TIMESTAMP -> {
+            // offset requires instance because it isn't that straightforward to get offset.
+            // e.g. it changes depending on the time of the year in some countries.
+            val offset: ZoneOffset = cfg.targetTz.rules.getOffset(sourceValue.toInstant())
+            JDate.from(sourceValue.toInstant().plus(java.time.Duration.ofSeconds(offset.totalSeconds.toLong())))
+        }
     }
 
 
