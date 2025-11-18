@@ -159,6 +159,7 @@ private fun buildUpdatedSchema(original: Schema, cfg: Config): Schema {
                 when (cfg.targetType) {
                     TimestampTargetType.STRING -> SchemaBuilder.string().optional().build()
                     TimestampTargetType.DATE -> Date.builder().optional().build()
+                    TimestampTargetType.TIMESTAMP -> Timestamp.builder().optional().build()
                 }
             } else {
                 field.schema()
