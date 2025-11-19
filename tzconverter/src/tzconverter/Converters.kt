@@ -120,6 +120,13 @@ private fun convertOne(sourceValue: JDate, cfg: Config): Any? =
                 .toInstant()
             JDate.from(utcMidnightInstant)
         }
+
+        TimestampTargetType.TIMESTAMP -> {
+            // offset requires instance because it isn't that straightforward to get offset.
+            // e.g. it changes depending on the time of the year in some countries.
+            val offset: ZoneOffset = cfg.targetTz.rules.getOffset(sourceValue.toInstant())
+            JDate.from(sourceValue.toInstant().plus(java.time.Duration.ofSeconds(offset.totalSeconds.toLong())))
+        }
     }
 
 
@@ -152,6 +159,7 @@ private fun buildUpdatedSchema(original: Schema, cfg: Config): Schema {
                 when (cfg.targetType) {
                     TimestampTargetType.STRING -> SchemaBuilder.string().optional().build()
                     TimestampTargetType.DATE -> Date.builder().optional().build()
+                    TimestampTargetType.TIMESTAMP -> Timestamp.builder().optional().build()
                 }
             } else {
                 field.schema()
